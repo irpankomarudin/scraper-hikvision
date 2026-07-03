@@ -95,7 +95,9 @@ def run_scraper():
                     # Try to get the image URL and save it
                     img_element = cells[1].query_selector("img")
                     img_src = ""
-                    image_filename = f"{person_id}.png" if person_id else f"unknown_{index}.png"
+                    # Tambahkan page_num dan index agar foto tidak tertimpa jika ada ID yang sama
+                    safe_id = person_id if person_id else "unknown"
+                    image_filename = f"{safe_id}_p{page_num}_r{index}.png"
                     image_path = os.path.join(IMAGES_DIR, image_filename)
                     
                     if img_element:
@@ -139,15 +141,6 @@ def run_scraper():
                 except Exception as e:
                     print(f"  -> Error scraping a row: {e}")
 
-            # Check if we are looping on the same page
-            if scraped_data:
-                current_first_id = scraped_data[-len(rows)]["ID"] if len(rows) > 0 else None
-                if current_first_id == previous_first_id:
-                    print("Detected same data as previous page. Assuming end of list.")
-                    # Remove the duplicates we just added for this page
-                    scraped_data = scraped_data[:-len(rows)]
-                    break
-                previous_first_id = current_first_id
 
             # Check if there's a next page button and if it's not disabled
             # E.g., Next button selector: '.btn-next'
