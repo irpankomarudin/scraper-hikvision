@@ -60,100 +60,106 @@ def run_scraper():
         has_next_page = True
         previous_first_id = None
         
-        while has_next_page:
-            print(f"Scraping Page {page_num}...")
-            
-            # Wait for table rows to be present. 
-            # You might need to update the selector '.el-table__row' based on actual site
-            # Hikvision usually uses Element UI or similar Vue/React frameworks
-            try:
-                page.wait_for_selector("tbody tr", timeout=10000)
-            except Exception:
-                print("Could not find table rows. Please check if you are on the right page.")
-                break
-
-            # Get all rows in the table
-            rows = page.query_selector_all("tbody tr")
-            print(f"Found {len(rows)} rows on this page.")
-            
-            for index, row in enumerate(rows):
+        try:
+            while has_next_page:
+                print(f"Scraping Page {page_num}...")
+                
+                # Wait for table rows to be present. 
+                # You might need to update the selector '.el-table__row' based on actual site
+                # Hikvision usually uses Element UI or similar Vue/React frameworks
                 try:
-                    # NOTE: These selectors need to be adjusted based on the actual DOM
-                    # We are guessing standard table columns based on the screenshot
-                    cells = row.query_selector_all("td")
-                    
-                    if len(cells) < 6:
-                        continue # Skip invalid rows
-                    
-                    # Assuming column order: Checkbox, Profile Pic, Name, ID, Person/Visitor, Phone No, Person Group
-                    name = cells[2].inner_text().strip()
-                    person_id = cells[3].inner_text().strip()
-                    person_type = cells[4].inner_text().strip()
-                    phone = cells[5].inner_text().strip()
-                    person_group = cells[6].inner_text().strip()
-                    
-                    # Try to get the image URL and save it
-                    img_element = cells[1].query_selector("img")
-                    img_src = ""
-                    # Tambahkan page_num dan index agar foto tidak tertimpa jika ada ID yang sama
-                    safe_id = person_id if person_id else "unknown"
-                    image_filename = f"{safe_id}_p{page_num}_r{index}.png"
-                    image_path = os.path.join(IMAGES_DIR, image_filename)
-                    
-                    if img_element:
-                        try:
-                            # Scroll into view just in case it's lazy loaded
-                            img_element.scroll_into_view_if_needed()
-                            
-                            # Extract base64 via canvas to ensure we get exactly what's rendered
-                            base64_str = img_element.evaluate("""(img) => {
-                                const canvas = document.createElement('canvas');
-                                canvas.width = img.naturalWidth || img.width || 100;
-                                canvas.height = img.naturalHeight || img.height || 100;
-                                const ctx = canvas.getContext('2d');
-                                ctx.drawImage(img, 0, 0);
-                                return canvas.toDataURL('image/png');
-                            }""")
-                            
-                            if base64_str and "," in base64_str:
-                                base64_data = base64_str.split(",")[1]
-                                import base64
-                                with open(image_path, "wb") as f:
-                                    f.write(base64.b64decode(base64_data))
-                                img_src = image_path
-                            else:
+                    page.wait_for_selector("tbody tr", timeout=10000)
+                except Exception:
+                    print("Could not find table rows. Please check if you are on the right page.")
+                    break
+
+                # Get all rows in the table
+                rows = page.query_selector_all("tbody tr")
+                print(f"Found {len(rows)} rows on this page.")
+                
+                for index, row in enumerate(rows):
+                    try:
+                        # NOTE: These selectors need to be adjusted based on the actual DOM
+                        # We are guessing standard table columns based on the screenshot
+                        cells = row.query_selector_all("td")
+                        
+                        if len(cells) < 6:
+                            continue # Skip invalid rows
+                        
+                        # Assuming column order: Checkbox, Profile Pic, Name, ID, Person/Visitor, Phone No, Person Group
+                        name = cells[2].inner_text().strip()
+                        person_id = cells[3].inner_text().strip()
+                        person_type = cells[4].inner_text().strip()
+                        phone = cells[5].inner_text().strip()
+                        person_group = cells[6].inner_text().strip()
+                        
+                        # Try to get the image URL and save it
+                        img_element = cells[1].query_selector("img")
+                        img_src = ""
+                        # Tambahkan page_num dan index agar foto tidak tertimpa jika ada ID yang sama
+                        safe_id = person_id if person_id else "unknown"
+                        image_filename = f"{safe_id}_p{page_num}_r{index}.png"
+                        image_path = os.path.join(IMAGES_DIR, image_filename)
+                        
+                        if img_element:
+                            try:
+                                # Scroll into view just in case it's lazy loaded
+                                img_element.scroll_into_view_if_needed()
+                                
+                                # Extract base64 via canvas to ensure we get exactly what's rendered
+                                base64_str = img_element.evaluate("""(img) => {
+                                    const canvas = document.createElement('canvas');
+                                    canvas.width = img.naturalWidth || img.width || 100;
+                                    canvas.height = img.naturalHeight || img.height || 100;
+                                    const ctx = canvas.getContext('2d');
+                                    ctx.drawImage(img, 0, 0);
+                                    return canvas.toDataURL('image/png');
+                                }""")
+                                
+                                if base64_str and "," in base64_str:
+                                    base64_data = base64_str.split(",")[1]
+                                    import base64
+                                    with open(image_path, "wb") as f:
+                                        f.write(base64.b64decode(base64_data))
+                                    img_src = image_path
+                                else:
+                                    img_src = img_element.get_attribute("src") or "Error saving"
+                            except Exception as e:
+                                print(f"      -> Failed to save image for {name}: {e}")
                                 img_src = img_element.get_attribute("src") or "Error saving"
-                        except Exception as e:
-                            print(f"      -> Failed to save image for {name}: {e}")
-                            img_src = img_element.get_attribute("src") or "Error saving"
-                    
-                    record = {
-                        "Name": name,
-                        "ID": person_id,
-                        "Type": person_type,
-                        "Phone": phone,
-                        "Group": person_group,
-                        "ImageSource": img_src
-                    }
-                    scraped_data.append(record)
-                    print(f"  -> Scraped: {name} (ID: {person_id})")
-                    
-                except Exception as e:
-                    print(f"  -> Error scraping a row: {e}")
+                        
+                        record = {
+                            "Name": name,
+                            "ID": person_id,
+                            "Type": person_type,
+                            "Phone": phone,
+                            "Group": person_group,
+                            "ImageSource": img_src
+                        }
+                        scraped_data.append(record)
+                        print(f"  -> Scraped: {name} (ID: {person_id})")
+                        
+                    except Exception as e:
+                        print(f"  -> Error scraping a row: {e}")
 
 
-            # Check if there's a next page button and if it's not disabled
-            # E.g., Next button selector: '.btn-next'
-            next_button = page.query_selector(".btn-next")
-            
-            if next_button and not next_button.get_attribute("disabled") and "is-disabled" not in next_button.get_attribute("class"):
-                print("Going to next page...")
-                next_button.click()
-                time.sleep(3) # Wait for table to reload
-                page_num += 1
-            else:
-                print("No more pages left.")
-                has_next_page = False
+                # Check if there's a next page button and if it's not disabled
+                # E.g., Next button selector: '.btn-next'
+                next_button = page.query_selector(".btn-next")
+                
+                if next_button and not next_button.get_attribute("disabled") and "is-disabled" not in next_button.get_attribute("class"):
+                    print("Going to next page...")
+                    next_button.click()
+                    time.sleep(3) # Wait for table to reload
+                    page_num += 1
+                else:
+                    print("No more pages left.")
+                    has_next_page = False
+        except KeyboardInterrupt:
+            print("\n" + "="*50)
+            print("SCRAPING DIHENTIKAN OLEH PENGGUNA (Ctrl+C)!")
+            print("Skrip akan segera menyimpan data yang sudah berhasil didapat ke dalam CSV...")
+            print("="*50 + "\n")
         
         # Save to DataFrame
         if scraped_data:
